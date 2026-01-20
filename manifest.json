@@ -1,0 +1,57 @@
+{
+  "manifest_version": 2,
+  "name": "论文智能整理助手",
+  "version": "1.0.2",
+  "description": "自动下载、解析和整理学术论文，提取作者、日期等信息并自动重命名",
+  
+  "permissions": [
+    "downloads",
+    "storage",
+    "activeTab",
+    "tabs",
+    "webRequest",
+    "webRequestBlocking",
+    "notifications",
+    "<all_urls>"
+  ],
+  
+  "background": {
+    "scripts": ["pinyin-loader.js", "ocr-api.js", "background.js"],
+    "persistent": true
+  },
+  
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["document-classifier.js", "image-preprocessor.js", "content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  
+  "browser_action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  
+  "action": {
+    "default_popup": "popup.html"
+  },
+  
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  
+  "web_accessible_resources": [
+    "pdfjs/*",
+    "test-pdf.html"
+  ],
+  
+  "options_page": "options.html"
+}
+

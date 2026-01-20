@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>论文验证报告</title>
+  <link rel="stylesheet" href="verification.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>📊 论文验证报告</h1>
+      <p class="subtitle">作者和日期匹配验证结果</p>
+    </header>
+    
+    <div class="controls">
+      <button id="startVerifyBtn" class="btn btn-primary">开始验证</button>
+      <button id="stopVerifyBtn" class="btn btn-secondary" disabled>停止验证</button>
+      <button id="exportBtn" class="btn btn-secondary">导出报告</button>
+    </div>
+    
+    <div class="stats">
+      <div class="stat-item">
+        <span class="stat-number" id="totalCount">0</span>
+        <span class="stat-label">总论文数</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-number" id="processedCount">0</span>
+        <span class="stat-label">已处理</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-number" id="matchCount">0</span>
+        <span class="stat-label">匹配成功</span>
+      </div>
+    </div>
+    
+    <div class="progress-container">
+      <div class="progress-bar">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+      <div class="progress-text" id="progressText">正在查找arXiv论文页面...</div>
+    </div>
+    
+    <div class="results-container">
+      <h2>验证结果</h2>
+      <div id="pdfUploadArea" style="display: none; margin-bottom: 20px; padding: 20px; border: 2px dashed #28a745; border-radius: 8px; background: #f0fff4;">
+        <div style="text-align: center;">
+          <div style="font-size: 40px; margin-bottom: 10px;">📎</div>
+          <div style="margin-bottom: 10px; color: #666; font-weight: bold;">需要上传PDF文件</div>
+          <div style="margin-bottom: 10px; color: #666; font-size: 14px;">请拖入PDF文件进行验证</div>
+          <input type="file" id="pdfFileInput" accept=".pdf" multiple style="display: none;">
+          <button id="pdfFileSelectBtn" class="btn btn-success" style="margin-top: 10px;">选择PDF文件</button>
+          <div style="margin-top: 10px; font-size: 12px; color: #999;">或者拖入PDF文件到此处（支持多个文件）</div>
+        </div>
+      </div>
+      <div id="resultsList" class="results-list">
+        <div class="empty-state">请点击"开始验证"按钮开始验证论文。</div>
+      </div>
+    </div>
+  </div>
+  
+  <script src="verification-page.js"></script>
+</body>
+</html>
+

@@ -1,0 +1,13 @@
+{
+  "ocrConfig": {
+    "baseUrl": "https://api.tokenpony.cn/v1",
+    "apiKey": "your-ocr-api-key-here",
+    "model": "deepseek-ocr"
+  },
+  "llmConfig": {
+    "baseUrl": "",
+    "apiKey": "",
+    "model": "deepseek-v3.2"
+  }
+}
+

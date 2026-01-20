@@ -1,0 +1,42 @@
+# 论文验证工具 - Python依赖
+# 安装命令: pip install -r requirements.txt
+
+# PDF处理
+PyPDF2>=3.0.0
+pdfplumber>=0.9.0
+
+# OCR库（推荐按优先级安装）
+# 方法1: PaddleOCR（推荐，中文识别准确率高，支持GPU加速）
+# 安装: pip install paddlepaddle paddleocr
+# 注意: 首次运行会自动下载模型文件
+
+# 方法2: EasyOCR（支持80+语言，准确率高）
+# 安装: pip install easyocr
+# 注意: 首次运行会自动下载模型文件
+
+# 方法3: pytesseract（需要额外安装Tesseract OCR引擎）
+pytesseract>=0.3.10
+Pillow>=10.0.0
+pdf2image>=1.16.0
+
+# 拼音转换（pypinyin已经很成熟，推荐使用）
+pypinyin>=0.50.0
+
+# 日期解析
+python-dateutil>=2.8.0
+
+# GUI (tkinter通常已包含在Python中，无需安装)
+
+# ============================================
+# 推荐安装方式（选择其一）:
+# ============================================
+# 1. 使用PaddleOCR（推荐，中文识别最好）:
+#    pip install paddlepaddle paddleocr pdf2image PyPDF2 pdfplumber pypinyin python-dateutil
+#
+# 2. 使用EasyOCR（多语言支持好）:
+#    pip install easyocr pdf2image PyPDF2 pdfplumber pypinyin python-dateutil
+#
+# 3. 使用pytesseract（轻量级，需要安装Tesseract引擎）:
+#    pip install pytesseract Pillow pdf2image PyPDF2 pdfplumber pypinyin python-dateutil
+#    然后安装Tesseract OCR引擎（见README_PYTHON.md）
+

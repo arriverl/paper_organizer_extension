@@ -1,0 +1,1866 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF提取功能测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .upload-area {
+            border: 2px dashed #667eea;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            background: #f9f9f9;
+            margin-bottom: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .upload-area:hover {
+            background: #e6eafc;
+            border-color: #5568d3;
+        }
+        .upload-area.dragover {
+            background: #d4edda;
+            border-color: #28a745;
+        }
+        input[type="file"] {
+            display: none;
+        }
+        .btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        .btn:hover {
+            background: #5568d3;
+        }
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .result-area {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f9f9f9;
+            border-radius: 8px;
+            display: none;
+        }
+        .result-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: white;
+            border-radius: 5px;
+            border-left: 4px solid #667eea;
+        }
+        .result-section h3 {
+            margin-top: 0;
+            color: #667eea;
+        }
+        .result-item {
+            margin: 10px 0;
+            padding: 10px;
+            background: #f0f0f0;
+            border-radius: 4px;
+        }
+        .result-label {
+            font-weight: bold;
+            color: #666;
+            margin-right: 10px;
+        }
+        .result-value {
+            color: #333;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+        .loading.active {
+            display: block;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .error {
+            color: #dc3545;
+            background: #f8d7da;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .success {
+            color: #28a745;
+            background: #d4edda;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📄 PDF提取功能测试</h1>
+        <p>此工具用于测试PDF文件的信息提取功能，包括标题、作者、日期等信息的提取。</p>
+        
+        <div class="upload-area" id="uploadArea">
+            <p>📁 点击或拖拽PDF文件到这里</p>
+            <p style="font-size: 12px; color: #666;">支持单个或多个PDF文件</p>
+        </div>
+        <input type="file" id="fileInput" accept=".pdf" multiple>
+        
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>正在处理PDF文件...</p>
+        </div>
+        
+        <div class="result-area" id="resultArea">
+            <h2>提取结果</h2>
+            <div id="results"></div>
+        </div>
+    </div>
+
+    <!-- 加载pdf.js库 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        // 初始化pdf.js
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const loading = document.getElementById('loading');
+        const resultArea = document.getElementById('resultArea');
+        const resultsDiv = document.getElementById('results');
+
+        // 点击上传区域
+        uploadArea.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        // 文件选择
+        fileInput.addEventListener('change', (e) => {
+            handleFiles(Array.from(e.target.files));
+        });
+
+        // 拖放功能
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = Array.from(e.dataTransfer.files).filter(f => f.name.toLowerCase().endsWith('.pdf'));
+            if (files.length > 0) {
+                handleFiles(files);
+            }
+        });
+
+        // 处理文件
+        async function handleFiles(files) {
+            if (files.length === 0) return;
+
+            loading.classList.add('active');
+            resultArea.style.display = 'none';
+            resultsDiv.innerHTML = '';
+
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                try {
+                    const result = await extractPdfInfo(file);
+                    displayResult(file.name, result, i === files.length - 1);
+                } catch (error) {
+                    displayError(file.name, error);
+                }
+            }
+
+            loading.classList.remove('active');
+            resultArea.style.display = 'block';
+        }
+
+        // 提取PDF信息
+        async function extractPdfInfo(file) {
+            console.log('开始处理PDF文件:', file.name);
+
+            // 读取文件为ArrayBuffer
+            const arrayBuffer = await file.arrayBuffer();
+
+            // 加载PDF
+            const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+            const pdf = await loadingTask.promise;
+
+            console.log('PDF加载成功，总页数:', pdf.numPages);
+
+            // 提取元数据
+            const metadata = await pdf.getMetadata();
+            const info = metadata.info || {};
+
+            console.log('提取的元数据:', info);
+
+            // 提取文本内容（前5页）
+            let fullText = '';
+            let firstPageText = '';
+            const maxPages = Math.min(pdf.numPages, 5);
+
+            for (let i = 1; i <= maxPages; i++) {
+                try {
+                    const page = await pdf.getPage(i);
+                    const textContent = await page.getTextContent();
+                    const pageText = textContent.items.map(item => item.str).join(' ');
+                    fullText += pageText + ' ';
+
+                    if (i === 1) {
+                        firstPageText = pageText;
+                    }
+
+                    console.log(`第${i}页文本长度:`, pageText.length);
+                } catch (error) {
+                    console.warn(`读取第${i}页失败:`, error);
+                }
+            }
+
+            // 检测是否是扫描件（文本太少）
+            const isScanned = fullText.trim().length < 100;
+            console.log('是否扫描件:', isScanned, '文本长度:', fullText.trim().length);
+
+            // 提取标题
+            let title = info.Title || '';
+            console.log('[标题提取] 开始提取标题，元数据标题:', title);
+            
+            // 检查标题是否像文件名或无效标题（如DOI、编号等）
+            const isFilename = title && (title.toLowerCase().endsWith('.pdf') || title.includes('\\') || title.includes('/'));
+            // 检查是否像DOI或编号（如 "D5NR03036F 1..11 ++"）
+            const isInvalidTitle = title && (
+                /^[A-Z0-9]+\s*\d+\.\.\d+/.test(title) || // 如 "D5NR03036F 1..11"
+                /^[A-Z0-9]+\s*\+\+/.test(title) || // 如 "D5NR03036F ++"
+                /^[A-Z0-9]{5,}\s*[\d\.\+\-]+$/.test(title) || // 如 "D5NR03036F 1..11 ++"
+                /^\d+[A-Z]+\d+/.test(title) // 如 "10.1039/d5nr03036f"
+            );
+            console.log('[标题提取] 是否像文件名:', isFilename, '是否无效标题:', isInvalidTitle);
+            
+            if (isFilename || isInvalidTitle || !title || title.length < 10) {
+                console.log('[标题提取] 从第一页文本提取标题，第一页文本长度:', firstPageText.length);
+                // 从第一页文本提取标题（改进版，支持更复杂的标题格式）
+                // 改进：如果文本没有换行符，尝试按多个空格或特定模式分割
+                let firstPageLines = firstPageText.split(/\n+/).filter(line => line.trim().length > 0);
+                
+                // 如果只有一行，尝试按多个空格或特定模式分割
+                if (firstPageLines.length === 1 && firstPageLines[0].length > 200) {
+                    console.log('[标题提取] 检测到单行文本，尝试智能分割...');
+                    const longLine = firstPageLines[0];
+                    // 尝试按多个连续空格分割
+                    firstPageLines = longLine.split(/\s{3,}/).filter(line => line.trim().length > 0);
+                    // 如果还是太长，尝试按特定关键词分割
+                    if (firstPageLines.length === 1) {
+                        const parts = longLine.split(/\s+(?:DOI|Received|Accepted|Published|Cite this|PAPER|View Article)/i);
+                        if (parts.length > 1) {
+                            firstPageLines = parts.filter(line => line.trim().length > 0);
+                        }
+                    }
+                    console.log('[标题提取] 智能分割后行数:', firstPageLines.length);
+                }
+                
+                console.log('[标题提取] 第一页总行数:', firstPageLines.length);
+                
+                // 改进：从原始文本中直接提取标题（更可靠，支持合并被分割的标题）
+                console.log('[标题提取] 尝试从原始文本直接提取标题...');
+                
+                // 查找标题区域（在DOI/Received之前，跳过期刊名等）
+                const titleEndMarkers = ['DOI:', 'doi:', 'Received', 'Accepted', 'Published', 'Cite this'];
+                let titleStartIndex = 0;
+                let titleEndIndex = firstPageText.length;
+                
+                // 查找标题结束位置
+                for (const marker of titleEndMarkers) {
+                    const index = firstPageText.indexOf(marker);
+                    if (index > 0 && index < titleEndIndex) {
+                        titleEndIndex = index;
+                    }
+                }
+                
+                // 跳过期刊名、PAPER等
+                const skipPatterns = ['Nanoscale', 'PAPER', 'Cite this'];
+                for (const pattern of skipPatterns) {
+                    const index = firstPageText.indexOf(pattern);
+                    if (index >= 0 && index < titleEndIndex) {
+                        // 找到模式后，继续查找该模式后的内容
+                        const afterPattern = firstPageText.substring(index + pattern.length);
+                        // 跳过可能的冒号、空格等
+                        const cleanStart = afterPattern.replace(/^[\s:]*/, '');
+                        titleStartIndex = Math.max(titleStartIndex, index + pattern.length + (afterPattern.length - cleanStart.length));
+                    }
+                }
+                
+                // 提取标题候选区域
+                console.log('[标题提取] 标题区域索引检查: titleStartIndex=', titleStartIndex, 'titleEndIndex=', titleEndIndex);
+                
+                if (titleEndIndex > titleStartIndex) {
+                    let titleCandidate = firstPageText.substring(titleStartIndex, titleEndIndex).trim();
+                    console.log('[标题提取] 标题区域索引:', titleStartIndex, '到', titleEndIndex, '总长度:', titleCandidate.length);
+                    console.log('[标题提取] 提取的标题候选区域（前500字符）:', titleCandidate.substring(0, 500));
+                    
+                    // 改进：在候选区域中查找作者名位置，提前截断
+                    // 作者名模式：至少两个大写字母开头的名字，可能包含逗号、上下标标记等
+                    const authorPatternInText = /([A-Z][a-z]+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?(?:\s*[a-z\s,]*\s*[A-Z][a-z]+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)*(?:\s+and\s+[A-Z][a-z]+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)?)/;
+                    const authorMatch = titleCandidate.match(authorPatternInText);
+                    if (authorMatch && authorMatch.index > 50) {
+                        // 如果找到作者名且位置合理（在标题之后），截断标题候选区域
+                        titleCandidate = titleCandidate.substring(0, authorMatch.index).trim();
+                        console.log('[标题提取] 检测到作者名，截断标题候选区域，新长度:', titleCandidate.length);
+                    }
+                    
+                    // 改进：如果候选区域太短或看起来不完整，尝试从多行文本中提取
+                    // 检查候选区域是否包含完整的标题（至少包含一些学术词汇）
+                    const hasAcademicWords = titleCandidate && (
+                        /(computational|screening|analysis|study|research|method|approach|system|model|algorithm|framework|design|development|evaluation|optimization|synthesis|reaction|catalyst|material|device|sensor|detection|recognition|classification|prediction|learning|network|neural|deep|machine|artificial|intelligence)/i.test(titleCandidate)
+                    );
+                    
+                    if (!titleCandidate || titleCandidate.length < 20 || !hasAcademicWords) {
+                        console.log('[标题提取] 候选区域不完整，尝试从多行文本中提取...');
+                        // 查找包含学术词汇的行，并向前回溯查找可能被分割的标题片段
+                        let foundTitleStart = false;
+                        for (let i = 0; i < Math.min(15, firstPageLines.length); i++) {
+                            const line = firstPageLines[i].trim();
+                            // 跳过明显的非标题行
+                            if (line.match(/^(Nanoscale|PAPER|Cite this|DOI|doi|Received|Accepted|Published|rsc\.li)/i)) {
+                                continue;
+                            }
+                            // 改进：更早地检测作者名（包括单个作者名后跟逗号的情况）
+                            const isAuthorLine = line.match(/^[A-Z][a-z]+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?(?:\s*[,;]|\s+[a-z]\s*[,;]|\s+and\s+[A-Z][a-z]+)/);
+                            if (isAuthorLine) {
+                                console.log('[标题提取] 检测到作者行，停止提取:', line.substring(0, 50));
+                                break;
+                            }
+                            
+                            // 改进：检查是否是标题行（包含小写字母的学术词汇）
+                            const hasLowercase = line.match(/[a-z]/);
+                            const hasAcademicWord = /(computational|screening|analysis|study|research|method|approach|system|model|algorithm|framework|design|development|evaluation|optimization|synthesis|reaction|catalyst|material|device|sensor|detection|recognition|classification|prediction|learning|network|neural|deep|machine|artificial|intelligence)/i.test(line);
+                            const isShortFragment = line.length <= 5 && /^[\d\sA-Z\-]+$/.test(line); // 短片段，可能是被分割的标题
+                            
+                            // 如果找到包含学术词汇的行，标记标题开始
+                            if (hasLowercase && (hasAcademicWord || line.length >= 20)) {
+                                foundTitleStart = true;
+                                if (!titleCandidate) {
+                                    titleCandidate = line;
+                                } else {
+                                    titleCandidate += ' ' + line;
+                                }
+                            } 
+                            // 如果已经在标题区域，短片段也可能是标题的一部分
+                            else if (foundTitleStart && isShortFragment) {
+                                titleCandidate += line; // 直接连接，不添加空格（如 "M" + "2" + "N" + "4"）
+                            }
+                            // 如果已经在标题区域，继续的行也可能是标题的一部分
+                            else if (foundTitleStart && hasLowercase && line.length >= 10) {
+                                titleCandidate += ' ' + line;
+                            }
+                        }
+                        console.log('[标题提取] 从多行文本提取的候选区域（前300字符）:', titleCandidate ? titleCandidate.substring(0, 300) : '(空)');
+                    }
+                    
+                    // 改进：直接使用候选区域，智能清理和合并
+                    // 先移除作者名（如果存在）
+                    let cleanedCandidate = titleCandidate;
+                    const authorMatch2 = cleanedCandidate.match(authorPatternInText);
+                    if (authorMatch2 && authorMatch2.index > 30) {
+                        cleanedCandidate = cleanedCandidate.substring(0, authorMatch2.index).trim();
+                        console.log('[标题提取] 从候选区域移除作者名，新长度:', cleanedCandidate.length);
+                    }
+                    
+                    // 移除明显的非标题部分
+                    cleanedCandidate = cleanedCandidate
+                        .replace(/^(Nanoscale|PAPER|Cite this|DOI|doi|Received|Accepted|Published).*?/i, '')
+                        .trim();
+                    
+                    // 改进：智能合并被分割的标题部分
+                    // 处理类似 "Computational screening of M   2 N   4   -C-type" 的情况
+                    // 将多个空格替换为单个空格，但保留短片段之间的连接（如 "M   2 N   4" → "M2N4"）
+                    let mergedTitle = '';
+                    const parts = cleanedCandidate.split(/\s+/);
+                    
+                    for (let i = 0; i < parts.length; i++) {
+                        const part = parts[i];
+                        const nextPart = parts[i + 1];
+                        
+                        // 如果当前部分是短片段（数字、字母、符号），且下一个部分也是短片段，直接连接
+                        if (part.length <= 3 && /^[\dA-Z\-]+$/.test(part) && 
+                            nextPart && nextPart.length <= 3 && /^[\dA-Z\-]+$/.test(nextPart)) {
+                            mergedTitle += part;
+                        } 
+                        // 如果当前部分以连字符结尾或下一个部分以连字符开头，直接连接
+                        else if (part.endsWith('-') || (nextPart && nextPart.startsWith('-'))) {
+                            mergedTitle += part;
+                        }
+                        // 如果当前部分是短片段且前一个部分也是短片段，直接连接
+                        else if (part.length <= 3 && /^[\dA-Z\-]+$/.test(part) && 
+                                 mergedTitle.length > 0 && /[\dA-Z\-]$/.test(mergedTitle)) {
+                            mergedTitle += part;
+                        }
+                        else {
+                            mergedTitle += (mergedTitle ? ' ' : '') + part;
+                        }
+                    }
+                    
+                    // 清理多余空格
+                    mergedTitle = mergedTitle.replace(/\s+/g, ' ').trim();
+                    
+                    // 检查并移除末尾的作者名（如果误包含）
+                    const authorSuffixPattern = /\s+([A-Z][a-z]+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)(?:\s*[,;]|\s+[a-z]\s*[,;]|\s+and\s+[A-Z][a-z]+)?$/;
+                    const authorSuffixMatch = mergedTitle.match(authorSuffixPattern);
+                    if (authorSuffixMatch && authorSuffixMatch.index > 50) {
+                        mergedTitle = mergedTitle.substring(0, authorSuffixMatch.index).trim();
+                        console.log('[标题提取] 移除末尾的作者名:', authorSuffixMatch[1]);
+                    }
+                    
+                    // 验证标题是否有效
+                    if (mergedTitle.length >= 20 && mergedTitle.length <= 300 && mergedTitle.match(/[a-z]/)) {
+                        title = mergedTitle;
+                        console.log('[标题提取] ✓ 从原始文本提取标题:', title);
+                    } else {
+                        console.log('[标题提取] 原始文本提取的标题无效，长度:', mergedTitle.length, '内容:', mergedTitle.substring(0, 100));
+                    }
+                }
+                
+                // 如果从原始文本提取失败，尝试从原始文本中直接搜索标题
+                if (!title || title.length < 20) {
+                    console.log('[标题提取] 原始文本提取失败，尝试从原始文本中直接搜索标题...');
+                    // 在原始文本中搜索包含学术词汇的长文本片段（在DOI/Received之前）
+                    const searchText = firstPageText.substring(0, Math.min(1000, firstPageText.length));
+                    // 查找包含 "computational" 或 "screening" 的文本片段
+                    console.log('[标题搜索] 搜索区域长度:', searchText.length, '前300字符:', searchText.substring(0, 300));
+                    const titleMatch = searchText.match(/(Computational\s+screening\s+of\s+[^J]+?)(?:\s+Jiaxiang\s+Wu|DOI|Received|Accepted)/i);
+                    console.log('[标题搜索] 正则匹配结果:', titleMatch ? '找到匹配' : '未找到匹配', titleMatch ? '匹配长度: ' + titleMatch[1].length : '');
+                    if (titleMatch && titleMatch[1]) {
+                        let candidateTitle = titleMatch[1].trim();
+                        console.log('[标题搜索] 提取的候选标题（原始）:', candidateTitle);
+                        
+                        // 改进：修复被分割的单词（如 "fi rst" → "first"）
+                        // 只修复已知的被分割单词，避免误合并普通单词
+                        console.log('[标题修复] 开始修复被分割的单词，原始标题:', candidateTitle);
+                        const splitWords = {
+                            'fi rst': 'first',
+                            'fi nancial': 'financial',
+                            'fi nal': 'final',
+                            'se cond': 'second',
+                            'th ird': 'third',
+                            'fo urth': 'fourth',
+                            'fi fth': 'fifth',
+                            'fi rst-principles': 'first-principles',
+                            'fi nal': 'final'
+                        };
+                        
+                        // 先修复带连字符的被分割单词（如 "fi rst-principles" → "first-principles"）
+                        for (const [split, fixed] of Object.entries(splitWords)) {
+                            if (split.includes('-')) {
+                                const regex = new RegExp('\\b' + split.replace(/\s+/g, '\\s+') + '\\b', 'gi');
+                                const before = candidateTitle;
+                                candidateTitle = candidateTitle.replace(regex, fixed);
+                                if (before !== candidateTitle) {
+                                    console.log(`[标题修复] 修复带连字符的被分割单词: "${split}" → "${fixed}"`);
+                                }
+                            }
+                        }
+                        
+                        // 再修复普通的被分割单词（如 "fi rst" → "first"）
+                        for (const [split, fixed] of Object.entries(splitWords)) {
+                            if (!split.includes('-')) {
+                                const regex = new RegExp('\\b' + split.replace(/\s+/g, '\\s+') + '\\b', 'gi');
+                                const before = candidateTitle;
+                                candidateTitle = candidateTitle.replace(regex, fixed);
+                                if (before !== candidateTitle) {
+                                    console.log(`[标题修复] 修复普通的被分割单词: "${split}" → "${fixed}"`);
+                                }
+                            }
+                        }
+                        console.log('[标题修复] 修复后的标题:', candidateTitle);
+                        
+                        // 改进：智能合并被分割的标题部分
+                        // 处理类似 "M   2 N   4" 的情况，合并成 "M2N4"
+                        console.log('[标题合并] 开始合并标题，原始候选:', candidateTitle);
+                        let mergedTitle = '';
+                        const parts = candidateTitle.split(/\s+/).filter(p => p.length > 0); // 过滤空字符串
+                        console.log('[标题合并] 分割后的部分数量:', parts.length, '部分列表:', parts);
+                        let prevPart = null; // 记录前一个部分
+                        
+                        for (let i = 0; i < parts.length; i++) {
+                            const part = parts[i];
+                            const nextPart = parts[i + 1];
+                            
+                            // 判断当前部分是否是短片段（纯数字、大写字母、符号，不包含小写字母，且长度<=3）
+                            const isShortFragment = part.length <= 3 && /^[\dA-Z\-]+$/.test(part) && !/[a-z]/.test(part);
+                            const isNextShortFragment = nextPart && nextPart.length <= 3 && /^[\dA-Z\-]+$/.test(nextPart) && !/[a-z]/.test(nextPart);
+                            
+                            // 判断前一个部分是否是短片段
+                            const prevIsShortFragment = prevPart && prevPart.length <= 3 && /^[\dA-Z\-]+$/.test(prevPart) && !/[a-z]/.test(prevPart);
+                            
+                            // 判断前一个部分是否是普通单词（包含小写字母）
+                            const prevIsWord = prevPart && /[a-z]/.test(prevPart);
+                            
+                            console.log(`[标题合并] 处理第${i + 1}部分: "${part}"`, {
+                                isShortFragment,
+                                isNextShortFragment,
+                                prevPart,
+                                prevIsShortFragment,
+                                prevIsWord,
+                                mergedTitleBefore: mergedTitle
+                            });
+                            
+                            // 如果当前部分是短片段，但前一个部分是普通单词，添加空格（优先级最高）
+                            if (isShortFragment && prevIsWord) {
+                                mergedTitle += ' ' + part;
+                                console.log(`[标题合并] 规则1: 短片段+普通单词（前一个），添加空格，mergedTitle: "${mergedTitle}"`);
+                            }
+                            // 如果当前部分是短片段，且下一个部分也是短片段，直接连接（不添加空格）
+                            else if (isShortFragment && isNextShortFragment) {
+                                mergedTitle += part;
+                                console.log(`[标题合并] 规则2: 短片段+短片段，直接连接，mergedTitle: "${mergedTitle}"`);
+                            } 
+                            // 如果当前部分是短片段，且前一个部分也是短片段，直接连接（不添加空格）
+                            else if (isShortFragment && prevIsShortFragment) {
+                                mergedTitle += part;
+                                console.log(`[标题合并] 规则3: 短片段+短片段（前一个），直接连接，mergedTitle: "${mergedTitle}"`);
+                            }
+                            // 如果当前部分以连字符结尾或下一个部分以连字符开头，直接连接
+                            else if (part.endsWith('-') || (nextPart && nextPart.startsWith('-'))) {
+                                mergedTitle += part;
+                                console.log(`[标题合并] 规则4: 连字符相关，直接连接，mergedTitle: "${mergedTitle}"`);
+                            }
+                            // 如果当前部分是普通单词，前一个部分是短片段，添加空格
+                            else if (!isShortFragment && prevIsShortFragment) {
+                                mergedTitle += ' ' + part;
+                                console.log(`[标题合并] 规则5: 普通单词+短片段（前一个），添加空格，mergedTitle: "${mergedTitle}"`);
+                            }
+                            // 如果当前部分是普通单词，前一个部分也是普通单词，添加空格
+                            else if (!isShortFragment && prevIsWord) {
+                                mergedTitle += ' ' + part;
+                                console.log(`[标题合并] 规则6: 普通单词+普通单词，添加空格，mergedTitle: "${mergedTitle}"`);
+                            }
+                            // 如果当前部分是普通单词，且是第一个部分，直接添加
+                            else if (!isShortFragment && !prevPart) {
+                                mergedTitle += part;
+                                console.log(`[标题合并] 规则7: 第一个普通单词，直接添加，mergedTitle: "${mergedTitle}"`);
+                            }
+                            // 其他情况，添加空格
+                            else {
+                                mergedTitle += (mergedTitle ? ' ' : '') + part;
+                                console.log(`[标题合并] 规则8: 默认情况，添加空格，mergedTitle: "${mergedTitle}"`);
+                            }
+                            
+                            // 更新前一个部分
+                            prevPart = part;
+                        }
+                        
+                        console.log('[标题合并] 合并完成，最终标题:', mergedTitle);
+                        
+                        candidateTitle = mergedTitle;
+                        console.log('[标题清理] 合并后的标题:', candidateTitle);
+                        
+                        // 检查并移除末尾的作者名
+                        const authorSuffixMatch = candidateTitle.match(/\s+([A-Z][a-z]+\s+[A-Z][a-z]+)(?:\s*[,;]|\s+[a-z]\s*[,;])?$/);
+                        if (authorSuffixMatch && authorSuffixMatch.index > 50) {
+                            console.log('[标题清理] 检测到末尾的作者名，移除:', authorSuffixMatch[1]);
+                            candidateTitle = candidateTitle.substring(0, authorSuffixMatch.index).trim();
+                            console.log('[标题清理] 移除作者名后的标题:', candidateTitle);
+                        }
+                        
+                        console.log('[标题验证] 标题长度:', candidateTitle.length, '是否包含小写字母:', /[a-z]/.test(candidateTitle));
+                        if (candidateTitle.length >= 20 && candidateTitle.length <= 300) {
+                            title = candidateTitle;
+                            console.log('[标题提取] ✓ 从原始文本直接搜索找到标题:', title);
+                        } else {
+                            console.log('[标题验证] ✗ 标题验证失败，长度:', candidateTitle.length, '内容:', candidateTitle.substring(0, 100));
+                        }
+                    }
+                }
+                
+                // 如果从原始文本提取失败，尝试多行合并
+                if (!title || title.length < 20) {
+                    console.log('[标题提取] 尝试多行合并提取...');
+                    let titleLines = [];
+                    let inTitleSection = false;
+                    let titleStartIndex = -1; // 记录标题开始的行索引
+                    
+                    for (let lineIndex = 0; lineIndex < Math.min(30, firstPageLines.length); lineIndex++) {
+                        const line = firstPageLines[lineIndex];
+                        const trimmedLine = line.trim();
+                        
+                        console.log(`[标题提取] 检查第${lineIndex + 1}行，长度:${trimmedLine.length}, 内容:`, trimmedLine.substring(0, 80));
+                        
+                        // 跳过明显的非标题行
+                        if (trimmedLine.match(/^(https?:\/\/|www\.|doi:|doi\.org|rsc\.li|Cite this|PAPER|View Article|View Journal|Check for updates|Received|Accepted|Published|DOI|Abstract|Introduction|Keywords|Author|Nanoscale)/i)) {
+                            if (inTitleSection) {
+                                // 如果已经在标题区域，遇到非标题行就停止
+                                break;
+                            }
+                            continue;
+                        }
+                        
+                        // 检查是否是标题行（改进：支持短行，可能是被分割的标题的一部分）
+                        const hasLowercase = trimmedLine.match(/[a-z]/);
+                        const hasAcademicWord = /(computational|screening|analysis|study|research|method|approach|system|model|algorithm|framework|design|development|evaluation|optimization|synthesis|reaction|catalyst|material|device|sensor|detection|recognition|classification|prediction|learning|network|neural|deep|machine|artificial|intelligence)/i.test(trimmedLine);
+                        // 改进：更早地检测作者名（包括单个作者名后跟逗号、上下标标记等）
+                        const isAuthorLine = trimmedLine.match(/^[A-Z][a-z]+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?(?:\s*[,;]|\s+[a-z]\s*[,;]|\s+and\s+[A-Z][a-z]+)/) ||
+                                           trimmedLine.match(/^[A-Z][a-z]+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?(?:\s*[a-z\s,]*\s*[A-Z][a-z]+\s+[A-Z][a-z]+)/);
+                        const isInstitution = trimmedLine.match(/\b(University|College|Institute|Department|Laboratory|Center|Centre)\b/i);
+                        const isShortFragment = trimmedLine.length <= 5 && /^[\d\sA-Z\-]+$/.test(trimmedLine); // 短片段，可能是被分割的标题
+                        const isNumberOrSymbol = trimmedLine.match(/^[\d\s\-]+$/); // 纯数字或符号，可能是被分割的标题
+                        
+                        // 改进：如果检测到作者行，立即停止（无论是否在标题区域）
+                        if (isAuthorLine) {
+                            console.log(`[标题提取] 检测到作者行，停止提取，第${lineIndex + 1}行:`, trimmedLine.substring(0, 50));
+                            break;
+                        }
+                        
+                        // 改进：如果检测到包含学术词汇的行，标记为标题开始，并向前回溯查找可能被分割的标题片段
+                        if (!inTitleSection && hasLowercase && (hasAcademicWord || trimmedLine.length >= 20)) {
+                            inTitleSection = true;
+                            titleStartIndex = lineIndex;
+                            console.log(`[标题提取] 检测到标题开始，第${lineIndex + 1}行，向前回溯查找标题片段...`);
+                            
+                            // 改进：向前回溯查找可能被分割的标题片段（最多回溯15行，更远地查找）
+                            let foundTitleStart = false;
+                            let foundFullTitleLine = false;
+                            for (let backIndex = lineIndex - 1; backIndex >= Math.max(0, lineIndex - 15); backIndex--) {
+                                const backLine = firstPageLines[backIndex].trim();
+                                
+                                // 跳过明显的非标题行
+                                if (backLine.match(/^(https?:\/\/|www\.|doi:|doi\.org|rsc\.li|Cite this|PAPER|View Article|View Journal|Check for updates|Received|Accepted|Published|DOI|Abstract|Introduction|Keywords|Author|Nanoscale)/i)) {
+                                    if (foundTitleStart) {
+                                        // 如果已经找到标题开始，遇到非标题行就停止
+                                        break;
+                                    }
+                                    continue;
+                                }
+                                
+                                const backHasLowercase = backLine.match(/[a-z]/);
+                                const backHasAcademicWord = /(computational|screening|analysis|study|research|method|approach|system|model|algorithm|framework|design|development|evaluation|optimization|synthesis|reaction|catalyst|material|device|sensor|detection|recognition|classification|prediction|learning|network|neural|deep|machine|artificial|intelligence)/i.test(backLine);
+                                
+                                // 如果是短片段（数字、字母、符号），可能是标题的一部分
+                                if (backLine.length <= 5 && /^[\d\sA-Z\-]+$/.test(backLine)) {
+                                    titleLines.unshift(backLine); // 插入到开头
+                                    console.log(`[标题提取] 回溯找到标题片段，第${backIndex + 1}行:`, backLine);
+                                    foundTitleStart = true;
+                                } 
+                                // 如果包含小写字母和学术词汇，是完整的标题行
+                                else if (backHasLowercase && (backHasAcademicWord || backLine.length >= 20)) {
+                                    titleLines.unshift(backLine); // 插入到开头
+                                    console.log(`[标题提取] 回溯找到标题行，第${backIndex + 1}行:`, backLine.substring(0, 80));
+                                    foundTitleStart = true;
+                                    foundFullTitleLine = true;
+                                    // 继续回溯，查找更前面的标题片段（可能还有更前面的标题行）
+                                }
+                                // 如果包含小写字母但较短，也可能是标题的一部分
+                                else if (backHasLowercase && backLine.length >= 10 && backLine.length < 20) {
+                                    titleLines.unshift(backLine); // 插入到开头
+                                    console.log(`[标题提取] 回溯找到标题片段（短行），第${backIndex + 1}行:`, backLine);
+                                    foundTitleStart = true;
+                                }
+                                // 如果已经找到完整的标题行，遇到空行或非标题内容，停止
+                                else if (foundFullTitleLine && (backLine.length === 0 || !backHasLowercase)) {
+                                    break;
+                                }
+                            }
+                            
+                            // 添加当前行
+                            titleLines.push(trimmedLine);
+                            console.log(`[标题提取] 第${lineIndex + 1}行加入标题候选`);
+                            continue;
+                        }
+                        
+                        // 如果已经在标题区域，短行或数字行可能是标题的延续
+                        if (inTitleSection && (isShortFragment || isNumberOrSymbol)) {
+                            titleLines.push(trimmedLine);
+                            console.log(`[标题提取] 第${lineIndex + 1}行（短片段）加入标题候选`);
+                            continue;
+                        }
+                        
+                        // 跳过太短的行（除非是标题的延续）
+                        if (trimmedLine.length < 5 && !inTitleSection) {
+                            continue;
+                        }
+                        
+                        if (hasLowercase && !isAuthorLine && !isInstitution && trimmedLine.length >= 20 && trimmedLine.length <= 400) {
+                            titleLines.push(trimmedLine);
+                            inTitleSection = true;
+                            if (titleStartIndex === -1) titleStartIndex = lineIndex;
+                            console.log(`[标题提取] 第${lineIndex + 1}行加入标题候选`);
+                        } else if (hasLowercase && !isAuthorLine && !isInstitution && trimmedLine.length >= 10 && trimmedLine.length < 20 && inTitleSection) {
+                            // 如果已经在标题区域，较短的包含小写字母的行也可能是标题的一部分
+                            titleLines.push(trimmedLine);
+                            console.log(`[标题提取] 第${lineIndex + 1}行（短行）加入标题候选`);
+                        } else if (inTitleSection && !hasLowercase && trimmedLine.length > 0 && trimmedLine.length < 20) {
+                            // 如果已经在标题区域，短的非小写行可能是标题的延续（如 "2 N 4"）
+                            titleLines.push(trimmedLine);
+                            console.log(`[标题提取] 第${lineIndex + 1}行（延续）加入标题候选`);
+                        } else if (inTitleSection) {
+                            // 如果已经在标题区域，遇到非标题行就停止
+                            break;
+                        }
+                    }
+                    
+                    // 合并标题行（改进：智能合并，处理被分割的标题）
+                    if (titleLines.length > 0) {
+                        // 改进：智能合并，处理被分割的标题片段
+                        let mergedTitle = '';
+                        for (let i = 0; i < titleLines.length; i++) {
+                            const currentLine = titleLines[i].trim();
+                            if (i === 0) {
+                                mergedTitle = currentLine;
+                            } else {
+                                const prevLine = titleLines[i - 1].trim();
+                                // 如果前一行以连字符结尾或当前行以连字符开头，直接连接
+                                if (prevLine.endsWith('-') || currentLine.startsWith('-')) {
+                                    mergedTitle += currentLine;
+                                } 
+                                // 改进：如果前一行以字母或数字结尾，当前行以字母或数字开头，且前一行很短，可能是被分割的标题（如"M2"和"N4"）
+                                else if (prevLine.length <= 5 && 
+                                         /[A-Z0-9]$/.test(prevLine.replace(/\s+/g, '')) && 
+                                         /^[A-Z0-9]/.test(currentLine.replace(/\s+/g, ''))) {
+                                    // 移除空格后直接连接（如 "2 N" + "4" → "2N4"）
+                                    mergedTitle += currentLine.replace(/\s+/g, '');
+                                }
+                                // 改进：如果前一行是短数字/字母组合（如 "2 N"），当前行也是短数字/字母（如 "4"），可能是化学式或编号
+                                else if (prevLine.length <= 5 && 
+                                         /^[\d\sA-Z\-]+$/.test(prevLine) && 
+                                         currentLine.length <= 5 &&
+                                         /^[\d\sA-Z\-]+$/.test(currentLine)) {
+                                    // 移除空格后直接连接
+                                    mergedTitle += currentLine.replace(/\s+/g, '');
+                                }
+                                // 改进：如果前一行以空格结尾的短片段，当前行也是短片段，直接连接
+                                else if (prevLine.length <= 5 && currentLine.length <= 5) {
+                                    mergedTitle += currentLine.replace(/\s+/g, '');
+                                }
+                                else {
+                                    mergedTitle += ' ' + currentLine;
+                                }
+                            }
+                        }
+                        // 改进：清理标题，移除作者名（如果误包含）
+                        // 检查末尾是否包含作者名模式
+                        const authorSuffixPattern = /\s+([A-Z][a-z]+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)(?:\s*[,;]|\s+[a-z]\s*[,;]|\s+and\s+[A-Z][a-z]+)?$/;
+                        const authorMatch = mergedTitle.match(authorSuffixPattern);
+                        if (authorMatch && authorMatch.index > 50) {
+                            // 如果找到作者名且位置合理，移除它
+                            mergedTitle = mergedTitle.substring(0, authorMatch.index).trim();
+                            console.log('[标题提取] 移除误包含的作者名:', authorMatch[1]);
+                        }
+                        
+                        // 清理多余空格，但保留必要的空格
+                        title = mergedTitle.replace(/\s+/g, ' ').trim();
+                        if (title.length > 300) {
+                            title = title.substring(0, 300).trim();
+                        }
+                        console.log('[标题提取] ✓ 合并多行标题:', title);
+                    }
+                }
+                
+                if (!title || title.length < 10) {
+                    console.warn('[标题提取] ✗ 未能从文本提取到有效标题');
+                }
+            } else {
+                console.log('[标题提取] 使用元数据标题:', title);
+            }
+
+            // 提取作者信息
+            let author = info.Author || '';
+            let firstAuthor = author.split(/[,;]/)[0]?.trim() || '';
+            let allAuthors = author ? author.split(/[,;]/).map(a => a.trim()) : [];
+            
+            console.log('[作者提取] 开始提取作者，元数据作者:', author, '第一作者:', firstAuthor);
+
+            // 从文本中提取作者（改进版，支持上下标标记和特殊字符）
+            if (!firstAuthor && fullText) {
+                console.log('[作者提取] 从第一页文本提取作者，第一页文本长度:', firstPageText.length);
+                // 先尝试从第一页提取作者行（通常在标题之后）
+                let firstPageLines = firstPageText.split(/\n+/).filter(line => line.trim().length > 0);
+                
+                // 如果只有一行，尝试按多个空格或特定模式分割
+                if (firstPageLines.length === 1 && firstPageLines[0].length > 200) {
+                    console.log('[作者提取] 检测到单行文本，尝试智能分割...');
+                    const longLine = firstPageLines[0];
+                    // 尝试按多个连续空格分割
+                    firstPageLines = longLine.split(/\s{3,}/).filter(line => line.trim().length > 0);
+                    // 如果还是太长，尝试按特定关键词分割
+                    if (firstPageLines.length === 1) {
+                        const parts = longLine.split(/\s+(?:DOI|Received|Accepted|Published|Cite this|PAPER|View Article|State Key|College|Department)/i);
+                        if (parts.length > 1) {
+                            firstPageLines = parts.filter(line => line.trim().length > 0);
+                        }
+                    }
+                    console.log('[作者提取] 智能分割后行数:', firstPageLines.length);
+                }
+                
+                console.log('[作者提取] 第一页总行数:', firstPageLines.length);
+                
+                // 改进：从原始文本中直接提取作者（更可靠）
+                console.log('[作者提取] 尝试从原始文本直接提取作者...');
+                
+                // 查找作者区域（通常在标题之后，机构信息之前）
+                // 查找包含多个作者名的模式（支持上下标标记）
+                // 注意：matchAll需要全局标志
+                const authorPattern = /([A-Z][a-z]+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?(?:\s*[a-z\s,]*\s*[A-Z][a-z]+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?){1,}(?:\s+and\s+[A-Z][a-z]+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)?)/g;
+                
+                // 在原始文本中查找（跳过前面的标题部分）
+                const titleEndIndex = firstPageText.indexOf('DOI:') > 0 ? firstPageText.indexOf('DOI:') : 
+                                     (firstPageText.indexOf('Received') > 0 ? firstPageText.indexOf('Received') : firstPageText.length);
+                const searchText = firstPageText.substring(0, Math.min(titleEndIndex + 500, firstPageText.length));
+                
+                console.log('[作者提取] 搜索区域长度:', searchText.length, '前200字符:', searchText.substring(0, 200));
+                
+                // 查找所有可能的作者匹配（使用matchAll避免无限循环）
+                let bestMatch = null;
+                let bestMatchLength = 0;
+                
+                try {
+                    // 使用matchAll获取所有匹配（更安全，不会无限循环）
+                    const matches = searchText.matchAll(authorPattern);
+                    let matchCount = 0;
+                    const maxMatches = 10; // 限制最多检查10个匹配
+                    
+                    for (const match of matches) {
+                        matchCount++;
+                        if (matchCount > maxMatches) {
+                            console.log('[作者提取] 达到最大匹配数限制，停止搜索');
+                            break;
+                        }
+                        
+                        const matchText = match[1];
+                        console.log('[作者提取] 找到作者匹配 #' + matchCount + '，位置:', match.index, '长度:', matchText.length, '内容:', matchText.substring(0, 100));
+                        
+                        // 选择最长的匹配（通常包含更多作者）
+                        if (matchText.length > bestMatchLength && matchText.length > 30) {
+                            bestMatch = matchText;
+                            bestMatchLength = matchText.length;
+                        }
+                    }
+                    
+                    console.log('[作者提取] 总共找到', matchCount, '个匹配');
+                } catch (e) {
+                    console.warn('[作者提取] matchAll失败，尝试使用match:', e);
+                    // 备用方法：使用match（只获取第一个匹配）
+                    const match = searchText.match(authorPattern);
+                    if (match) {
+                        bestMatch = match[1];
+                        console.log('[作者提取] 使用match找到匹配，长度:', bestMatch.length);
+                    }
+                }
+                
+                if (bestMatch) {
+                    console.log('[作者提取] 选择最佳匹配，长度:', bestMatch.length, '内容:', bestMatch.substring(0, 150));
+                    let authorLine = bestMatch;
+                    
+                    // 改进的清理逻辑：更精确地移除上下标标记
+                    // 匹配模式：名字后的 "a,b,c" 或 "a, b, c" 这样的标记
+                    // 但不删除名字本身
+                    authorLine = authorLine.replace(/\s+([a-z]\s*,\s*[a-z](?:\s*,\s*[a-z])*)\s+/gi, ' ');
+                    // 移除单独的上下标标记（如 "a,b,c" 前后有空格）
+                    authorLine = authorLine.replace(/\s*\b[a-z](?:\s*,\s*[a-z])+\b\s*/gi, ' ');
+                    // 移除星号（通讯作者标记）
+                    authorLine = authorLine.replace(/\s*\*\s*/g, ' ');
+                    // 规范化空格
+                    authorLine = authorLine.replace(/\s+/g, ' ').trim();
+                    console.log('[作者提取] 清理后:', authorLine);
+                    
+                    // 提取所有作者（按 "and" 或逗号分割）
+                    let authors = [];
+                    // 先按 "and" 分割
+                    const parts = authorLine.split(/\s+and\s+/i);
+                    for (const part of parts) {
+                        // 再按逗号分割
+                        const names = part.split(/\s*,\s*/).map(a => a.trim()).filter(a => a.length > 0);
+                        authors.push(...names);
+                    }
+                    
+                    // 过滤和验证作者名
+                    authors = authors.map(a => a.trim()).filter(a => {
+                        // 必须是至少两个单词（名+姓），且每个单词首字母大写
+                        const words = a.split(/\s+/);
+                        if (words.length < 2) return false;
+                        // 检查是否像名字（每个单词首字母大写，后面是小写）
+                        const isValidName = words.every(w => /^[A-Z][a-z]+$/.test(w));
+                        // 排除机构名
+                        const isInstitution = a.match(/^(State Key|College|Department|Laboratory|University|Institute|Center|Centre)/i);
+                        return isValidName && !isInstitution && a.length > 5;
+                    });
+                    
+                    console.log('[作者提取] 提取到的作者列表:', authors);
+                    
+                    if (authors.length > 0) {
+                        firstAuthor = authors[0];
+                        allAuthors = authors;
+                        author = authors.join(', ');
+                        console.log('[作者提取] ✓ 找到作者，第一作者:', firstAuthor, '所有作者:', allAuthors);
+                    }
+                }
+                
+                // 如果从原始文本提取失败，尝试多行合并处理
+                if (!firstAuthor && firstPageLines.length > 1) {
+                    console.log('[作者提取] 尝试多行合并提取...');
+                    
+                    // 改进：合并连续的可能作者行
+                    let authorLines = [];
+                    let inAuthorSection = false;
+                    
+                    for (let i = 0; i < Math.min(25, firstPageLines.length); i++) {
+                        const line = firstPageLines[i].trim();
+                        console.log(`[作者提取] 检查第${i + 1}行，长度:${line.length}, 内容:`, line.substring(0, 100));
+                        
+                        // 检查是否是作者行（包含名字模式）
+                        const hasAuthorName = /[A-Z][a-z]+\s+[A-Z][a-z]+/.test(line);
+                        const isShortLine = line.length < 200;
+                        const hasMarkers = /[a-z]\s*,\s*[a-z]|\*/.test(line); // 包含上下标标记或*
+                        const isInstitution = /\b(University|College|Institute|Department|Laboratory|State Key)\b/i.test(line);
+                        
+                        // 如果包含作者名且不是机构信息，可能是作者行
+                        if (hasAuthorName && !isInstitution && (isShortLine || hasMarkers)) {
+                            authorLines.push(line);
+                            inAuthorSection = true;
+                            console.log(`[作者提取] 第${i + 1}行加入作者候选`);
+                        } else if (inAuthorSection) {
+                            // 如果已经在作者区域，遇到非作者行就停止
+                            if (isInstitution || line.length > 200) {
+                                break;
+                            }
+                            // 如果下一行很短且包含名字，继续
+                            if (hasAuthorName && isShortLine) {
+                                authorLines.push(line);
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // 合并作者行
+                    if (authorLines.length > 0) {
+                        console.log('[作者提取] 合并', authorLines.length, '行作者信息');
+                        let mergedAuthorLine = authorLines.join(' ');
+                        console.log('[作者提取] 合并后的原始文本:', mergedAuthorLine.substring(0, 200));
+                        
+                        // 清理：移除上下标标记
+                        mergedAuthorLine = mergedAuthorLine.replace(/\s*[a-z]\s*,\s*[a-z]\s*(?:,\s*[a-z]\s*)*/gi, '');
+                        mergedAuthorLine = mergedAuthorLine.replace(/\s*\*\s*/g, ' ');
+                        mergedAuthorLine = mergedAuthorLine.replace(/\s+/g, ' ').trim();
+                        console.log('[作者提取] 清理后:', mergedAuthorLine);
+                        
+                        // 提取所有作者
+                        const authors = mergedAuthorLine.split(/\s+and\s+|\s*,\s*/).map(a => a.trim()).filter(a => {
+                            return a.length > 5 && /^[A-Z][a-z]+(\s+[A-Z][a-z]+)+/.test(a) && 
+                                   !a.match(/^(State Key|College|Department|Laboratory|University|Institute|Electrochemical|ammonia|synthesis)/i);
+                        });
+                        
+                        console.log('[作者提取] 提取到的作者列表:', authors);
+                        
+                        if (authors.length > 0) {
+                            firstAuthor = authors[0];
+                            allAuthors = authors;
+                            author = authors.join(', ');
+                            console.log('[作者提取] ✓ 合并多行找到作者，第一作者:', firstAuthor, '所有作者:', allAuthors);
+                        }
+                    }
+                    
+                    // 如果合并多行还是失败，尝试单行匹配
+                    if (!firstAuthor) {
+                        console.log('[作者提取] 尝试单行匹配...');
+                        for (let i = 0; i < Math.min(20, firstPageLines.length); i++) {
+                            const line = firstPageLines[i].trim();
+                            
+                            // 改进：更宽松的作者行匹配模式
+                            const authorLinePattern = /^([A-Z][a-z]+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?(?:\s*[a-z\s,]*\s*[A-Z][a-z]+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)*(?:\s+and\s+[A-Z][a-z]+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)?)/;
+                            const authorMatch = line.match(authorLinePattern);
+                            
+                            if (authorMatch) {
+                                console.log(`[作者提取] 第${i + 1}行匹配到作者模式，原始匹配:`, authorMatch[1].substring(0, 100));
+                                
+                                // 清理作者行：移除上下标标记（如a,b,c）、特殊字符（如*）等
+                                let authorLine = authorMatch[1];
+                                console.log('[作者提取] 清理前:', authorLine.substring(0, 100));
+                                
+                                // 移除上下标标记（字母+逗号+空格，如 " a , b , c " 或 "a,b,c"）
+                                authorLine = authorLine.replace(/\s*[a-z]\s*,\s*[a-z]\s*(?:,\s*[a-z]\s*)*/gi, '');
+                                // 移除单独的标记字符（如 *）
+                                authorLine = authorLine.replace(/\s*\*\s*/g, ' ');
+                                // 移除多余空白
+                                authorLine = authorLine.replace(/\s+/g, ' ').trim();
+                                
+                                console.log('[作者提取] 清理后:', authorLine);
+                                
+                                // 提取所有作者（支持逗号和"and"分隔）
+                                const authors = authorLine.split(/\s+and\s+|\s*,\s*/).map(a => a.trim()).filter(a => {
+                                    // 过滤掉太短或看起来不像名字的片段
+                                    return a.length > 3 && /^[A-Z][a-z]+(\s+[A-Z][a-z]+)+/.test(a);
+                                });
+                                
+                                console.log('[作者提取] 提取到的作者列表:', authors);
+                                
+                                if (authors.length > 0) {
+                                    firstAuthor = authors[0];
+                                    allAuthors = authors;
+                                    author = authors.join(', ');
+                                    console.log('[作者提取] ✓ 找到作者，第一作者:', firstAuthor, '所有作者:', allAuthors);
+                                    break;
+                                }
+                            } else {
+                                // 尝试更简单的模式：查找包含多个大写字母开头的单词的行
+                                const simpleAuthorPattern = /([A-Z][a-z]+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?(?:\s*[,\s]*[a-z\s,]*\s*[A-Z][a-z]+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)+)/;
+                                const simpleMatch = line.match(simpleAuthorPattern);
+                                if (simpleMatch && line.length < 200 && line.length > 30) {
+                                    console.log(`[作者提取] 第${i + 1}行匹配到简单作者模式:`, simpleMatch[1].substring(0, 100));
+                                    let authorLine = simpleMatch[1];
+                                    authorLine = authorLine.replace(/\s*[a-z]\s*,\s*[a-z]\s*(?:,\s*[a-z]\s*)*/gi, '');
+                                    authorLine = authorLine.replace(/\s*\*\s*/g, ' ');
+                                    authorLine = authorLine.replace(/\s+/g, ' ').trim();
+                                    const authors = authorLine.split(/\s+and\s+|\s*,\s*/).map(a => a.trim()).filter(a => a.length > 3);
+                                    if (authors.length > 0) {
+                                        firstAuthor = authors[0];
+                                        allAuthors = authors;
+                                        author = authors.join(', ');
+                                        console.log('[作者提取] ✓ 找到作者（简单模式），第一作者:', firstAuthor);
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // 如果还没找到，尝试其他模式
+                if (!firstAuthor) {
+                    console.log('[作者提取] 尝试备用方法...');
+                    const authorPatterns = [
+                        /Author[s]?:\s*([^\n]+)/i,
+                        /By:\s*([^\n]+)/i,
+                        /^([A-Z][a-z]+\s+[A-Z]\.?\s+[A-Z][a-z]+)/m
+                    ];
+                    for (let pIndex = 0; pIndex < authorPatterns.length; pIndex++) {
+                        const pattern = authorPatterns[pIndex];
+                        const match = fullText.match(pattern);
+                        if (match) {
+                            console.log(`[作者提取] 备用方法${pIndex + 1}匹配成功:`, match[1].substring(0, 100));
+                            let authorText = match[1].trim();
+                            // 清理作者文本
+                            authorText = authorText.replace(/\b[a-z](?:,[a-z])+\b/gi, '').replace(/\s*\*\s*/g, ' ').replace(/\s+/g, ' ').trim();
+                            firstAuthor = authorText.split(/[,;]/)[0]?.trim() || authorText;
+                            allAuthors = authorText.split(/[,;]/).map(a => a.trim());
+                            console.log('[作者提取] ✓ 找到作者（备用方法），第一作者:', firstAuthor);
+                            break;
+                        }
+                    }
+                }
+                
+                if (!firstAuthor) {
+                    console.warn('[作者提取] ✗ 未能从文本提取到作者');
+                }
+            } else if (firstAuthor && allAuthors.length === 0) {
+                // 如果从元数据提取到了作者，也填充allAuthors
+                allAuthors = author.split(/[,;]/).map(a => a.trim());
+                console.log('[作者提取] 使用元数据作者，所有作者:', allAuthors);
+            }
+
+            // 提取日期信息
+            const dates = extractDates(fullText, info);
+            
+            // 标准化所有日期
+            if (dates.received) {
+                dates.receivedNormalized = normalizeDateString(dates.received);
+            }
+            if (dates.revised) {
+                dates.revisedNormalized = normalizeDateString(dates.revised);
+            }
+            if (dates.accepted) {
+                dates.acceptedNormalized = normalizeDateString(dates.accepted);
+            }
+            if (dates.published) {
+                dates.publishedNormalized = normalizeDateString(dates.published);
+            }
+            if (dates.availableOnline) {
+                dates.availableOnlineNormalized = normalizeDateString(dates.availableOnline);
+            }
+
+            // 提取关键词
+            const keywords = info.Keywords ? info.Keywords.split(/[,;]/).map(k => k.trim()) : [];
+
+            // 过滤Subject中的期刊信息（如"Engineering Failure Analysis, 173 (2025) 109456. doi:10.1016/j.engfailanal.2025.109456"）
+            let subject = info.Subject || '';
+            // 检查是否包含期刊信息模式（doi、卷号、年份等）
+            const journalPattern = /(doi:|doi\.org|vol\.|volume|\(\d{4}\)|\d{4}\s*,\s*\d+|issn|isbn)/i;
+            if (journalPattern.test(subject)) {
+                console.log('检测到Subject包含期刊信息，已过滤:', subject);
+                subject = ''; // 清空期刊信息
+            }
+
+            // 检查提取质量：标题、作者、日期（至少有一个日期）
+            const hasTitle = title && title !== '未提取' && !title.match(/^[A-Z0-9]+[\s\d\.\+\-]+$/); // 排除像"D5NR03036F 1..11 ++"这样的无效标题
+            const hasAuthor = firstAuthor && firstAuthor !== '未提取';
+            const hasDate = dates.received || dates.accepted || dates.published || dates.availableOnline;
+            
+            const missingCount = (!hasTitle ? 1 : 0) + (!hasAuthor ? 1 : 0) + (!hasDate ? 1 : 0);
+            console.log('提取质量检查:', {
+                hasTitle, hasAuthor, hasDate, missingCount,
+                title: title.substring(0, 50),
+                firstAuthor: firstAuthor.substring(0, 30)
+            });
+
+            let ocrResult = null;
+            // 如果至少两个信息缺失，使用OCR重新识别
+            if (missingCount >= 2) {
+                console.log('检测到提取信息不完整（缺失' + missingCount + '项），尝试使用OCR重新识别...');
+                try {
+                    ocrResult = await performOcrOnPdfFirstPage(pdf, arrayBuffer);
+                    console.log('OCR识别完成，原始输出:', ocrResult);
+                    
+                    // 合并OCR结果
+                    if (ocrResult && ocrResult.structured) {
+                        const ocr = ocrResult.structured;
+                        
+                        // 如果OCR提取到了更好的标题，使用OCR的标题
+                        if (!hasTitle && ocr.title && ocr.title !== 'Not mentioned') {
+                            title = ocr.title;
+                            console.log('使用OCR提取的标题:', title);
+                        }
+                        
+                        // 如果OCR提取到了作者，使用OCR的作者
+                        if (!hasAuthor && ocr.authors && ocr.authors !== 'Not mentioned') {
+                            const ocrAuthors = ocr.authors.split(/[,;]/).map(a => a.trim()).filter(a => a.length > 0);
+                            if (ocrAuthors.length > 0) {
+                                firstAuthor = ocrAuthors[0];
+                                allAuthors = ocrAuthors;
+                                author = ocr.authors;
+                                console.log('使用OCR提取的作者:', firstAuthor, '所有作者:', allAuthors);
+                            }
+                        }
+                        
+                        // 如果OCR提取到了日期，补充缺失的日期
+                        if (ocr.dates) {
+                            if (!dates.received && ocr.dates.received && ocr.dates.received !== 'Not mentioned') {
+                                dates.received = ocr.dates.received;
+                                dates.receivedNormalized = normalizeDateString(dates.received);
+                                console.log('使用OCR提取的Received日期:', dates.received);
+                            }
+                            if (!dates.revised && ocr.dates.revised && ocr.dates.revised !== 'Not mentioned') {
+                                dates.revised = ocr.dates.revised;
+                                dates.revisedNormalized = normalizeDateString(dates.revised);
+                                console.log('使用OCR提取的Revised日期:', dates.revised);
+                            }
+                            if (!dates.accepted && ocr.dates.accepted && ocr.dates.accepted !== 'Not mentioned') {
+                                dates.accepted = ocr.dates.accepted;
+                                dates.acceptedNormalized = normalizeDateString(dates.accepted);
+                                console.log('使用OCR提取的Accepted日期:', dates.accepted);
+                            }
+                            if (!dates.availableOnline && ocr.dates.available_online && ocr.dates.available_online !== 'Not mentioned') {
+                                dates.availableOnline = ocr.dates.available_online;
+                                dates.availableOnlineNormalized = normalizeDateString(dates.availableOnline);
+                                console.log('使用OCR提取的Available online日期:', dates.availableOnline);
+                            }
+                        }
+                    }
+                } catch (ocrError) {
+                    console.warn('OCR识别失败，继续使用PDF提取结果:', ocrError);
+                }
+            }
+
+            return {
+                success: true,
+                fileName: file.name,
+                fileSize: file.size,
+                totalPages: pdf.numPages,
+                isScanned: isScanned,
+                usedOcr: ocrResult !== null,
+                ocrResult: ocrResult,
+                metadata: {
+                    title: title || '未提取',
+                    author: author || (allAuthors.length > 0 ? allAuthors.join(', ') : '未提取'),
+                    firstAuthor: firstAuthor || '未提取',
+                    allAuthors: allAuthors.length > 0 ? allAuthors : [],
+                    subject: subject || '未提取',
+                    keywords: keywords,
+                    creator: info.Creator || '未提取',
+                    producer: info.Producer || '未提取',
+                    creationDate: info.CreationDate || '未提取',
+                    modDate: info.ModDate || '未提取'
+                },
+                extractedDates: dates,
+                textPreview: fullText.substring(0, 500),
+                textLength: fullText.length
+            };
+        }
+
+        // 对PDF第一页进行OCR识别
+        async function performOcrOnPdfFirstPage(pdf, arrayBuffer) {
+            try {
+                // 获取OCR配置（从localStorage或使用默认值）
+                const savedConfig = localStorage.getItem('ocrConfig');
+	                let ocrConfig = {
+	                    baseUrl: 'https://api.tokenpony.cn/v1',
+	                    apiKey: '',
+	                    model: 'deepseek-ocr'
+	                };
+                if (savedConfig) {
+                    ocrConfig = { ...ocrConfig, ...JSON.parse(savedConfig) };
+                }
+
+                if (!ocrConfig.apiKey) {
+                    throw new Error('OCR API Key未配置');
+                }
+
+                // 将PDF第一页转换为图片
+                const page = await pdf.getPage(1);
+                const viewport = page.getViewport({ scale: 2 });
+                const canvas = document.createElement('canvas');
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+                const context = canvas.getContext('2d');
+
+                await page.render({
+                    canvasContext: context,
+                    viewport: viewport
+                }).promise;
+
+                // 将canvas转换为base64
+                const imageDataUrl = canvas.toDataURL('image/jpeg', 0.95);
+
+                // 改进的OCR提示词（更简洁明确，不包含示例避免模型重复）
+                const ocrPrompt = `分析这张学术论文图片，提取信息并输出JSON格式。
+
+提取字段：
+- document_type: 文档类型（论文首页/录用通知/邮件/其他）
+- title: 论文标题（没有则填"Not mentioned"）
+- authors: 所有作者，逗号分隔（没有则填"Not mentioned"）
+- dates: 日期对象
+  * received: 投稿日期（Received日期，YYYY-MM-DD格式）
+  * revised: 修订日期（Revised日期，YYYY-MM-DD格式）
+  * accepted: 录用日期（Accepted日期，YYYY-MM-DD格式）
+  * available_online: 在线发表日期（Available online日期，YYYY-MM-DD格式）
+  （没有则填"Not mentioned"）
+- confidence_note: 置信度说明（可选）
+
+只输出JSON，不要任何解释文字。`;
+
+                // 发送OCR请求
+                const apiUrl = `${ocrConfig.baseUrl}/chat/completions`;
+                const requestBody = {
+                    model: ocrConfig.model,
+                    messages: [
+                        {
+                            role: 'user',
+                            content: [
+                                {
+                                    type: 'text',
+                                    text: ocrPrompt
+                                },
+                                {
+                                    type: 'image_url',
+                                    image_url: {
+                                        url: imageDataUrl
+                                    }
+                                }
+                            ]
+                        }
+                    ],
+                    temperature: 0,
+                    max_tokens: 4096,
+                    stream: false
+                };
+
+                console.log('发送OCR请求，API URL:', apiUrl);
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${ocrConfig.apiKey}`
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`OCR API请求失败: ${response.status} ${response.statusText} - ${errorText}`);
+                }
+
+                const data = await response.json();
+
+                // 提取识别结果
+                if (data.choices && data.choices.length > 0) {
+                    const content = data.choices[0].message.content;
+                    console.log('OCR原始输出（完整）:', content);
+                    console.log('OCR原始输出长度:', content.length);
+                    
+                    // 尝试解析JSON格式的结果
+                    let jsonData = null;
+                    let parseError = null;
+                    try {
+                        // 先尝试提取代码块中的JSON
+                        const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
+                        if (jsonMatch) {
+                            jsonData = JSON.parse(jsonMatch[1]);
+                            console.log('[OCR解析] 从json代码块解析成功');
+                        } else {
+                            // 尝试提取代码块（无语言标记）
+                            const codeMatch = content.match(/```\s*([\s\S]*?)\s*```/);
+                            if (codeMatch) {
+                                try {
+                                    jsonData = JSON.parse(codeMatch[1]);
+                                    console.log('[OCR解析] 从代码块解析成功');
+                                } catch (e) {
+                                    console.warn('[OCR解析] 代码块解析失败:', e);
+                                }
+                            }
+                            
+                            // 如果代码块解析失败，尝试提取JSON对象（可能被其他文字包围）
+                            if (!jsonData) {
+                                // 查找所有可能的JSON对象
+                                const jsonMatches = content.match(/\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g);
+                                if (jsonMatches && jsonMatches.length > 0) {
+                                    // 尝试解析每个匹配的JSON
+                                    for (const jsonStr of jsonMatches) {
+                                        try {
+                                            const parsed = JSON.parse(jsonStr);
+                                            // 检查是否是有效的学术文档JSON（包含document_type或title字段）
+                                            if (parsed.document_type || parsed.title || parsed.authors || parsed.dates) {
+                                                jsonData = parsed;
+                                                console.log('[OCR解析] 从文本中提取JSON解析成功');
+                                                break;
+                                            }
+                                        } catch (e) {
+                                            // 继续尝试下一个
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // 如果还是没找到，尝试直接解析整个内容
+                            if (!jsonData) {
+                                try {
+                                    jsonData = JSON.parse(content);
+                                    console.log('[OCR解析] 直接解析整个内容成功');
+                                } catch (e) {
+                                    console.warn('[OCR解析] 所有解析方法都失败');
+                                    parseError = e.message;
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        console.warn('[OCR解析] JSON解析失败:', e);
+                        console.warn('[OCR解析] 尝试解析的内容前500字符:', content.substring(0, 500));
+                        parseError = e.message;
+                    }
+                    
+                    // 如果解析成功但内容看起来像prompt本身，标记为无效
+                    if (jsonData && (
+                        jsonData.title === '论文标题' || 
+                        jsonData.authors === '作者1, 作者2' ||
+                        (jsonData.dates && jsonData.dates.received === '2025-01-01' && jsonData.dates.accepted === '2025-02-01')
+                    )) {
+                        console.warn('[OCR解析] 检测到解析结果是示例数据，可能是模型返回了prompt');
+                        jsonData = null;
+                        parseError = '解析结果是示例数据，非实际识别结果';
+                    }
+                    
+                    return {
+                        rawText: content,
+                        structured: jsonData,
+                        isStructured: jsonData !== null,
+                        parseError: parseError || (jsonData === null ? '无法解析JSON格式' : null)
+                    };
+                } else {
+                    throw new Error('OCR API返回结果为空');
+                }
+            } catch (error) {
+                console.error('OCR识别失败:', error);
+                throw error;
+            }
+        }
+
+        // 标准化日期字符串为 YYYY-MM-DD 格式
+        function normalizeDateString(dateStr) {
+            if (!dateStr) return '';
+            
+            // 处理中文日期格式：YYYY年MM月DD日 或 YYYY年MM月
+            const chineseDateMatch = dateStr.match(/(\d{4})\s*年\s*(\d{1,2})\s*月(?:\s*(\d{1,2})\s*日?)?/);
+            if (chineseDateMatch) {
+                const year = chineseDateMatch[1];
+                const month = String(chineseDateMatch[2]).padStart(2, '0');
+                const day = chineseDateMatch[3] ? String(chineseDateMatch[3]).padStart(2, '0') : '15'; // 如果没有日期，默认15号
+                return `${year}-${month}-${day}`;
+            }
+            
+            // 如果已经是YYYY-MM-DD格式
+            if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+                return dateStr;
+            }
+            
+            // 处理 "Month DD, YYYY" 格式 (如: "August 9, 2025")
+            const monthDayYearMatch = dateStr.match(/([A-Z][a-z]+)\s+(\d{1,2}),?\s+(\d{4})/);
+            if (monthDayYearMatch) {
+                const monthNames = {
+                    'January': '01', 'February': '02', 'March': '03', 'April': '04',
+                    'May': '05', 'June': '06', 'July': '07', 'August': '08',
+                    'September': '09', 'October': '10', 'November': '11', 'December': '12'
+                };
+                const month = monthNames[monthDayYearMatch[1]];
+                if (month) {
+                    const day = monthDayYearMatch[2].padStart(2, '0');
+                    const year = monthDayYearMatch[3];
+                    return `${year}-${month}-${day}`;
+                }
+            }
+            
+            // 处理 "DD(st/nd/rd/th) Month YYYY" 格式 (如: "18th July 2025", "13 June 2025" 或 "9 August 2025")
+            const dayMonthYearMatch = dateStr.match(/(\d{1,2})(?:st|nd|rd|th)?\s+([A-Z][a-z]+)\s+(\d{4})/);
+            if (dayMonthYearMatch) {
+                const monthNames = {
+                    'January': '01', 'February': '02', 'March': '03', 'April': '04',
+                    'May': '05', 'June': '06', 'July': '07', 'August': '08',
+                    'September': '09', 'October': '10', 'November': '11', 'December': '12'
+                };
+                const month = monthNames[dayMonthYearMatch[2]];
+                if (month) {
+                    const day = dayMonthYearMatch[1].padStart(2, '0');
+                    const year = dayMonthYearMatch[3];
+                    return `${year}-${month}-${day}`;
+                }
+            }
+            
+            // 处理 "Month DD(st/nd/rd/th), YYYY" 格式 (如: "July 18th, 2025")
+            const monthDayYearWithOrdinalMatch = dateStr.match(/([A-Z][a-z]+)\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})/);
+            if (monthDayYearWithOrdinalMatch) {
+                const monthNames = {
+                    'January': '01', 'February': '02', 'March': '03', 'April': '04',
+                    'May': '05', 'June': '06', 'July': '07', 'August': '08',
+                    'September': '09', 'October': '10', 'November': '11', 'December': '12'
+                };
+                const month = monthNames[monthDayYearWithOrdinalMatch[1]];
+                if (month) {
+                    const day = monthDayYearWithOrdinalMatch[2].padStart(2, '0');
+                    const year = monthDayYearWithOrdinalMatch[3];
+                    return `${year}-${month}-${day}`;
+                }
+            }
+            
+            // 处理 YYYY-MM-DD 或 YYYY/MM/DD 格式
+            const ymdMatch = dateStr.match(/(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
+            if (ymdMatch) {
+                const year = ymdMatch[1];
+                const month = ymdMatch[2].padStart(2, '0');
+                const day = ymdMatch[3].padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            }
+            
+            // 如果无法解析，返回原字符串
+            return dateStr;
+        }
+
+        // 提取日期信息（改进版，支持更精确的日期格式）
+        function extractDates(text, info) {
+            const dates = {
+                received: null,
+                revised: null,
+                accepted: null,
+                published: null,
+                availableOnline: null,
+                other: []
+            };
+
+            // 日期关键词（按优先级排序，长的在前）
+            const dateKeywords = {
+                revised: [
+                    'Received in revised form',
+                    'in revised form',
+                    'revised form',
+                    'Revised',
+                    'Revised:'
+                ],
+                received: [
+                    'Received',
+                    'Received date',
+                    'Received:',
+                    'Submitted',
+                    'Submitted on',
+                    'Submission date'
+                ],
+                accepted: [
+                    'Accepted',
+                    'Accepted date',
+                    'Accepted:',
+                    'Acceptance date'
+                ],
+                availableOnline: [
+                    'Available online',
+                    'Available online:',
+                    'Available Online',
+                    'Available Online:',
+                    'available online',
+                    'available online:',
+                    'Published online',
+                    'Published online:',
+                    'Online available',
+                    'Online available:'
+                ],
+                published: [
+                    'Published',
+                    'Published date',
+                    'Published:',
+                    'Publication date',
+                    'Date of publication'
+                ]
+            };
+
+            // 日期格式（按优先级排序，更具体的格式优先）
+            // 注意：支持序数后缀（st, nd, rd, th）
+            const datePatterns = [
+                /(\d{1,2}(?:st|nd|rd|th)?\s+[A-Z][a-z]+\s+\d{4})/,    // DD(st/nd/rd/th) Month YYYY (如: 18th July 2025, 1st January 2025)
+                /(\d{1,2}\s+[A-Z][a-z]+\s+\d{4})/,                    // DD Month YYYY (如: 1 January 2025)
+                /([A-Z][a-z]+\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4})/,  // Month DD(st/nd/rd/th), YYYY (如: July 18th, 2025)
+                /([A-Z][a-z]+\s+\d{1,2},\s+\d{4})/,                   // Month DD, YYYY (如: January 1, 2025)
+                /(\d{4}[-/]\d{1,2}[-/]\d{1,2})/,                      // YYYY-MM-DD
+                /(\d{1,2}[-/]\d{1,2}[-/]\d{4})/,                      // MM-DD-YYYY
+                /(\d{4})/                                              // YYYY
+            ];
+
+            // 先提取Revised日期（必须在Received之前，因为"Received in revised form"包含"Received"）
+            for (const keyword of dateKeywords.revised) {
+                const keywordRegex = new RegExp(keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+                const keywordMatch = text.match(keywordRegex);
+                if (keywordMatch) {
+                    const keywordIndex = keywordMatch.index;
+                    const context = text.substring(keywordIndex, keywordIndex + 200).replace(/\s+/g, ' ');
+                    console.log('检查Revised日期，关键词:', keyword, '上下文:', context.substring(0, 100));
+                    for (const pattern of datePatterns) {
+                        const match = context.match(pattern);
+                        if (match) {
+                            dates.revised = match[1];
+                            console.log('找到Revised日期:', match[1]);
+                            break;
+                        }
+                    }
+                    if (dates.revised) break;
+                }
+            }
+
+            // 提取Received日期（排除已经被Revised匹配的部分）
+            for (const keyword of dateKeywords.received) {
+                const keywordRegex = new RegExp(keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+                let match;
+                while ((match = keywordRegex.exec(text)) !== null) {
+                    const keywordIndex = match.index;
+                    // 检查这个位置是否属于"Received in revised form"（如果是，跳过）
+                    const checkRevised = text.substring(keywordIndex, keywordIndex + 30).toLowerCase();
+                    if (checkRevised.includes('received in revised form') || checkRevised.includes('in revised form')) {
+                        continue; // 跳过，因为这是Revised日期的一部分
+                    }
+                    
+                    const context = text.substring(keywordIndex, keywordIndex + 200).replace(/\s+/g, ' ');
+                    console.log('检查Received日期，关键词:', keyword, '上下文:', context.substring(0, 100));
+                    for (const pattern of datePatterns) {
+                        const dateMatch = context.match(pattern);
+                        if (dateMatch) {
+                            dates.received = dateMatch[1];
+                            console.log('找到Received日期:', dateMatch[1]);
+                            break;
+                        }
+                    }
+                    if (dates.received) break;
+                }
+                if (dates.received) break;
+            }
+
+            // 提取Accepted日期
+            for (const keyword of dateKeywords.accepted) {
+                const keywordRegex = new RegExp(keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+                const keywordMatch = text.match(keywordRegex);
+                if (keywordMatch) {
+                    const keywordIndex = keywordMatch.index;
+                    const context = text.substring(keywordIndex, keywordIndex + 200).replace(/\s+/g, ' ');
+                    console.log('检查Accepted日期，关键词:', keyword, '上下文:', context.substring(0, 100));
+                    for (const pattern of datePatterns) {
+                        const match = context.match(pattern);
+                        if (match) {
+                            dates.accepted = match[1];
+                            console.log('找到Accepted日期:', match[1]);
+                            break;
+                        }
+                    }
+                    if (dates.accepted) break;
+                }
+            }
+
+            // 提取Available online日期（优先）
+            for (const keyword of dateKeywords.availableOnline) {
+                // 使用更宽松的匹配，允许关键词前后有空格、换行等
+                const keywordRegex = new RegExp('\\b' + keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+') + '\\b', 'i');
+                const keywordMatch = text.match(keywordRegex);
+                if (keywordMatch) {
+                    const keywordIndex = keywordMatch.index;
+                    const keywordLength = keywordMatch[0].length;
+                    // 增加上下文长度到300字符，以便找到更远的日期
+                    const context = text.substring(keywordIndex, keywordIndex + 300);
+                    console.log('检查Available online日期，关键词:', keyword, '匹配位置:', keywordIndex, '上下文:', context.substring(0, 150));
+                    
+                    // 在"Available online"之后直接查找日期（不规范化空格，保持原始格式）
+                    // 查找"Available online"之后的下一个日期模式
+                    let foundDate = false;
+                    for (const pattern of datePatterns) {
+                        // 在上下文中查找所有匹配的日期（使用原始文本，不规范化空格）
+                        const matches = context.matchAll(new RegExp(pattern.source, 'g'));
+                        for (const match of matches) {
+                            const dateStr = match[1];
+                            const dateIndex = match.index;
+                            // 确保日期在"Available online"之后（至少跳过关键词本身）
+                            if (dateIndex >= keywordLength) {
+                                // 检查日期是否紧跟在"Available online"之后（在80个字符内，因为可能有期刊信息）
+                                const distanceFromKeyword = dateIndex - keywordLength;
+                                if (distanceFromKeyword <= 80) {
+                                    // 检查日期前是否有期刊信息
+                                    const beforeDate = context.substring(keywordLength, dateIndex);
+                                    const hasJournalInfo = /(Computers|Electronics|Agriculture|Journal|Volume|Vol\.|\(\d{4}\)|doi|\d{6})/i.test(beforeDate);
+                                    
+                                    // 如果日期前有期刊信息，但距离关键词较近（<50字符），可能是Available online的日期
+                                    // 如果日期前没有期刊信息，直接使用
+                                    if (!hasJournalInfo || distanceFromKeyword < 50) {
+                                        dates.availableOnline = dateStr;
+                                        console.log('找到Available online日期:', dateStr, '距离关键词:', distanceFromKeyword, '字符, 前文:', beforeDate.substring(0, 50));
+                                        foundDate = true;
+                                        break;
+                                    } else {
+                                        console.log('跳过日期（期刊信息干扰）:', dateStr, '距离:', distanceFromKeyword, '前文:', beforeDate.substring(0, 50));
+                                    }
+                                }
+                            }
+                        }
+                        if (foundDate) break;
+                    }
+                    
+                    // 如果没找到，尝试更宽松的匹配（在"Available online"之后查找任何日期）
+                    if (!foundDate) {
+                        // 从"Available online"之后开始搜索（不跳过太多字符，因为日期可能就在后面）
+                        const searchStart = keywordIndex + keywordLength;
+                        const searchText = text.substring(searchStart, searchStart + 100); // 只搜索100字符，因为日期通常就在后面
+                        console.log('Available online后搜索区域（宽松匹配）:', searchText.substring(0, 100));
+                        for (const pattern of datePatterns) {
+                            const match = searchText.match(pattern);
+                        if (match) {
+                            dates.availableOnline = match[1];
+                                console.log('找到Available online日期（宽松匹配）:', match[1]);
+                                foundDate = true;
+                            break;
+                        }
+                    }
+                    }
+                    
+                    if (foundDate) break;
+                } else {
+                    // 调试：如果没匹配到，输出可能的匹配位置
+                    const simpleMatch = text.match(/available\s+online/i);
+                    if (simpleMatch) {
+                        console.log('找到"available online"（但关键词匹配失败），位置:', simpleMatch.index, '上下文:', text.substring(simpleMatch.index, simpleMatch.index + 100));
+                    }
+                }
+            }
+
+            // 提取Published日期（如果Available online没找到）
+            if (!dates.availableOnline) {
+                for (const keyword of dateKeywords.published) {
+                    const keywordRegex = new RegExp(keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+                    const keywordMatch = text.match(keywordRegex);
+                    if (keywordMatch) {
+                        const keywordIndex = keywordMatch.index;
+                        const context = text.substring(keywordIndex, keywordIndex + 200).replace(/\s+/g, ' ');
+                        console.log('检查Published日期，关键词:', keyword, '上下文:', context.substring(0, 100));
+                        for (const pattern of datePatterns) {
+                            const match = context.match(pattern);
+                            if (match) {
+                                dates.published = match[1];
+                                console.log('找到Published日期:', match[1]);
+                                break;
+                            }
+                        }
+                        if (dates.published) break;
+                    }
+                }
+            }
+
+            // 从元数据提取创建日期（仅作为参考，不覆盖已提取的日期）
+            if (info.CreationDate && !dates.received && !dates.accepted) {
+                dates.other.push({ type: 'CreationDate', value: info.CreationDate });
+            }
+            if (info.ModDate && !dates.received && !dates.accepted) {
+                dates.other.push({ type: 'ModDate', value: info.ModDate });
+            }
+
+            return dates;
+        }
+
+        // 显示结果
+        function displayResult(fileName, result, isLast) {
+            const resultSection = document.createElement('div');
+            resultSection.className = 'result-section';
+            resultSection.innerHTML = `
+                <h3>📄 ${fileName}</h3>
+                <div class="result-item">
+                    <span class="result-label">文件大小:</span>
+                    <span class="result-value">${(result.fileSize / 1024).toFixed(2)} KB</span>
+                </div>
+                <div class="result-item">
+                    <span class="result-label">总页数:</span>
+                    <span class="result-value">${result.totalPages}</span>
+                </div>
+                <div class="result-item">
+                    <span class="result-label">是否扫描件:</span>
+                    <span class="result-value">${result.isScanned ? '是（文本较少，可能需要OCR）' : '否（包含文本）'}</span>
+                </div>
+                ${result.usedOcr ? `
+                <div class="result-item" style="background: #d1ecf1; padding: 10px; border-radius: 4px; margin-top: 10px;">
+                    <span class="result-label">OCR辅助:</span>
+                    <span class="result-value" style="color: #0c5460; font-weight: bold;">✓ 已使用OCR重新识别以补充缺失信息</span>
+                </div>
+                ${result.ocrResult ? `
+                <div class="result-item" style="background: #fff3cd; padding: 15px; border-radius: 4px; margin-top: 10px;">
+                    <h5 style="margin-top: 0; color: #856404;">🔍 OCR原始输出（完整回显）</h5>
+                    <div style="margin-bottom: 10px;">
+                        <strong>输出长度:</strong> ${result.ocrResult.rawText ? result.ocrResult.rawText.length : 0} 字符
+                    </div>
+                    <div style="margin-bottom: 10px;">
+                        <strong>是否结构化:</strong> ${result.ocrResult.isStructured ? '是' : '否'}
+                        ${result.ocrResult.parseError ? ` <span style="color: #dc3545;">(${result.ocrResult.parseError})</span>` : ''}
+                    </div>
+                    <details style="margin-top: 10px;">
+                        <summary style="cursor: pointer; color: #856404; font-weight: bold;">点击查看完整原始输出</summary>
+                        <pre style="background: #f8f9fa; padding: 10px; border-radius: 4px; margin-top: 10px; max-height: 400px; overflow-y: auto; font-size: 11px; white-space: pre-wrap; word-wrap: break-word;">${result.ocrResult.rawText || '无输出'}</pre>
+                    </details>
+                    ${result.ocrResult.structured ? `
+                    <details style="margin-top: 10px;">
+                        <summary style="cursor: pointer; color: #856404; font-weight: bold;">点击查看解析后的结构化数据</summary>
+                        <pre style="background: #f8f9fa; padding: 10px; border-radius: 4px; margin-top: 10px; max-height: 300px; overflow-y: auto; font-size: 11px;">${JSON.stringify(result.ocrResult.structured, null, 2)}</pre>
+                    </details>
+                    ` : ''}
+                </div>
+                ` : ''}
+                ` : ''}
+                <div class="result-item">
+                    <span class="result-label">提取的文本长度:</span>
+                    <span class="result-value">${result.textLength} 字符</span>
+                </div>
+                <h4>元数据信息</h4>
+                <div class="result-item">
+                    <span class="result-label">标题:</span>
+                    <span class="result-value">${result.metadata.title}</span>
+                </div>
+                <div class="result-item">
+                    <span class="result-label">作者:</span>
+                    <span class="result-value">${result.metadata.author}</span>
+                </div>
+                <div class="result-item">
+                    <span class="result-label">第一作者:</span>
+                    <span class="result-value">${result.metadata.firstAuthor}</span>
+                </div>
+                ${result.metadata.allAuthors && result.metadata.allAuthors.length > 1 ? `
+                <div class="result-item">
+                    <span class="result-label">所有作者:</span>
+                    <span class="result-value">${result.metadata.allAuthors.join(', ')}</span>
+                </div>
+                ` : ''}
+                <div class="result-item">
+                    <span class="result-label">主题:</span>
+                    <span class="result-value">${result.metadata.subject}</span>
+                </div>
+                <div class="result-item">
+                    <span class="result-label">关键词:</span>
+                    <span class="result-value">${result.metadata.keywords.length > 0 ? result.metadata.keywords.join(', ') : '无'}</span>
+                </div>
+                <div class="result-item">
+                    <span class="result-label">创建日期:</span>
+                    <span class="result-value">${result.metadata.creationDate}</span>
+                </div>
+                <div class="result-item">
+                    <span class="result-label">修改日期:</span>
+                    <span class="result-value">${result.metadata.modDate}</span>
+                </div>
+                <h4>提取的日期信息</h4>
+                <div class="result-item">
+                    <span class="result-label">收到日期 (Received):</span>
+                    <span class="result-value">${result.extractedDates.received || '未找到'}${result.extractedDates.receivedNormalized ? ` <span style="color: #28a745;">(${result.extractedDates.receivedNormalized})</span>` : ''}</span>
+                </div>
+                <div class="result-item">
+                    <span class="result-label">修订日期 (Revised):</span>
+                    <span class="result-value">${result.extractedDates.revised || '未找到'}${result.extractedDates.revisedNormalized ? ` <span style="color: #28a745;">(${result.extractedDates.revisedNormalized})</span>` : ''}</span>
+                </div>
+                <div class="result-item">
+                    <span class="result-label">接受日期 (Accepted):</span>
+                    <span class="result-value">${result.extractedDates.accepted || '未找到'}${result.extractedDates.acceptedNormalized ? ` <span style="color: #28a745;">(${result.extractedDates.acceptedNormalized})</span>` : ''}</span>
+                </div>
+                <div class="result-item">
+                    <span class="result-label">在线日期 (Available online):</span>
+                    <span class="result-value">${result.extractedDates.availableOnline || '未找到'}${result.extractedDates.availableOnlineNormalized ? ` <span style="color: #28a745;">(${result.extractedDates.availableOnlineNormalized})</span>` : ''}</span>
+                </div>
+                <div class="result-item">
+                    <span class="result-label">发表日期 (Published):</span>
+                    <span class="result-value">${result.extractedDates.published || '未找到'}${result.extractedDates.publishedNormalized ? ` <span style="color: #28a745;">(${result.extractedDates.publishedNormalized})</span>` : ''}</span>
+                </div>
+                ${result.extractedDates.other.length > 0 ? `
+                <div class="result-item">
+                    <span class="result-label">其他日期:</span>
+                    <span class="result-value">${result.extractedDates.other.map(d => `${d.type}: ${d.value}`).join(', ')}</span>
+                </div>
+                ` : ''}
+                <h4>文本预览（前500字符）</h4>
+                <pre>${result.textPreview || '无文本内容'}</pre>
+            `;
+            resultsDiv.appendChild(resultSection);
+        }
+
+        // 显示错误
+        function displayError(fileName, error) {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error';
+            errorDiv.innerHTML = `
+                <h3>❌ ${fileName} 处理失败</h3>
+                <p>${error.message || error}</p>
+            `;
+            resultsDiv.appendChild(errorDiv);
+        }
+    </script>
+</body>
+</html>

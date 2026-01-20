@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>论文助手 - 配置</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+    
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+      padding: 30px;
+    }
+    
+    h1 {
+      color: #333;
+      margin-bottom: 10px;
+      font-size: 28px;
+    }
+    
+    .subtitle {
+      color: #666;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+    
+    .section {
+      margin-bottom: 30px;
+      padding: 20px;
+      background: #f8f9fa;
+      border-radius: 8px;
+      border-left: 4px solid #667eea;
+    }
+    
+    .section-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 15px;
+    }
+    
+    .form-group {
+      margin-bottom: 20px;
+    }
+    
+    label {
+      display: block;
+      margin-bottom: 8px;
+      color: #555;
+      font-weight: 500;
+      font-size: 14px;
+    }
+    
+    input[type="text"],
+    textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      transition: border-color 0.3s;
+      font-family: 'Courier New', monospace;
+    }
+    
+    textarea {
+      resize: vertical;
+      min-height: 60px;
+    }
+    
+    input[type="text"]:focus,
+    textarea:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+    
+    .help-text {
+      font-size: 12px;
+      color: #888;
+      margin-top: 5px;
+    }
+    
+    .file-group {
+      background: white;
+      padding: 15px;
+      border-radius: 6px;
+      margin-bottom: 15px;
+      border: 1px solid #e0e0e0;
+    }
+    
+    .file-group-title {
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 10px;
+      font-size: 14px;
+    }
+    
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+    
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+    
+    .btn-secondary {
+      background: #6c757d;
+      color: white;
+      margin-left: 10px;
+    }
+    
+    .btn-secondary:hover {
+      background: #5a6268;
+    }
+    
+    .btn-group {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 30px;
+    }
+    
+    .success-message {
+      background: #d4edda;
+      color: #155724;
+      padding: 12px;
+      border-radius: 6px;
+      margin-bottom: 20px;
+      display: none;
+    }
+    
+    .success-message.show {
+      display: block;
+    }
+    
+    .add-file-btn {
+      background: #28a745;
+      color: white;
+      padding: 8px 16px;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+    
+    .add-file-btn:hover {
+      background: #218838;
+    }
+    
+    .remove-file-btn {
+      background: #dc3545;
+      color: white;
+      padding: 4px 8px;
+      border: none;
+      border-radius: 4px;
+      font-size: 11px;
+      cursor: pointer;
+      float: right;
+    }
+    
+    .remove-file-btn:hover {
+      background: #c82333;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>⚙️ 论文助手配置</h1>
+    <p class="subtitle">自定义网页元素选择器和下载文件配置</p>
+    
+    <div class="success-message" id="successMessage">
+      ✓ 配置已保存！
+    </div>
+    
+    <div class="section">
+      <div class="section-title">网页元素选择器</div>
+      
+      <div class="form-group">
+        <label for="titleExample">标题示例HTML</label>
+        <textarea id="titleExample" rows="2" placeholder="粘贴一个标题的HTML标签，例如: &lt;h1 class=&quot;title&quot;&gt;论文标题&lt;/h1&gt;"></textarea>
+        <div class="help-text">粘贴一个包含标题的HTML标签，插件会自动识别并提取所有匹配的标题</div>
+        <div id="titleSelectorDisplay" class="selector-display" style="display: none; margin-top: 8px; padding: 8px; background: #e8f4f8; border-radius: 4px; font-size: 12px;">
+          <strong>识别到的选择器:</strong> <span id="titleSelectorText"></span>
+        </div>
+        <input type="hidden" id="titleSelector">
+      </div>
+      
+      <div class="form-group">
+        <label for="authorExample">作者示例HTML</label>
+        <textarea id="authorExample" rows="2" placeholder="粘贴一个作者的HTML标签，例如: &lt;a href=&quot;...&quot;&gt;Haonan Qiu&lt;/a&gt;"></textarea>
+        <div class="help-text">粘贴一个包含作者名的HTML标签，插件会自动识别并提取所有匹配的作者</div>
+        <div id="authorSelectorDisplay" class="selector-display" style="display: none; margin-top: 8px; padding: 8px; background: #e8f4f8; border-radius: 4px; font-size: 12px;">
+          <strong>识别到的选择器:</strong> <span id="authorSelectorText"></span>
+        </div>
+        <input type="hidden" id="authorSelector">
+      </div>
+      
+      <div class="form-group">
+        <label for="dateExample">日期示例HTML</label>
+        <textarea id="dateExample" rows="2" placeholder="粘贴一个日期的HTML标签，例如: &lt;div class=&quot;dateline&quot;&gt;[Submitted on 24 Dec 2025]&lt;/div&gt;"></textarea>
+        <div class="help-text">粘贴一个包含日期的HTML标签，插件会自动识别并提取日期信息</div>
+        <div id="dateSelectorDisplay" class="selector-display" style="display: none; margin-top: 8px; padding: 8px; background: #e8f4f8; border-radius: 4px; font-size: 12px;">
+          <strong>识别到的选择器:</strong> <span id="dateSelectorText"></span>
+        </div>
+        <input type="hidden" id="dateSelector">
+      </div>
+    </div>
+    
+	    <div class="section">
+	      <div class="section-title">OCR配置（用于识别扫描件PDF）</div>
+      
+      <div class="form-group">
+        <label for="ocrApiKey">OCR API Key</label>
+        <input type="text" id="ocrApiKey" placeholder="请输入您的OCR API Key">
+        <div class="help-text">用于识别扫描件PDF的OCR API Key（来自 https://api.tokenpony.cn）</div>
+      </div>
+      
+      <div class="form-group">
+        <label for="ocrBaseUrl">OCR API Base URL</label>
+        <input type="text" id="ocrBaseUrl" placeholder="https://api.tokenpony.cn/v1" value="https://api.tokenpony.cn/v1">
+        <div class="help-text">OCR API的基础URL（默认: https://api.tokenpony.cn/v1）</div>
+      </div>
+      
+	      <div class="form-group">
+	        <label for="ocrModel">OCR模型</label>
+	        <input type="text" id="ocrModel" placeholder="deepseek-ocr" value="deepseek-ocr">
+	        <div class="help-text">OCR模型名称（默认: deepseek-ocr）</div>
+	      </div>
+	    </div>
+
+	    <div class="section">
+	      <div class="section-title">LLM配置（用于OCR后结构化整理）</div>
+	      
+	      <div class="form-group">
+	        <label for="llmApiKey">LLM API Key</label>
+	        <input type="text" id="llmApiKey" placeholder="留空则复用OCR API Key">
+	        <div class="help-text">用于将OCR文本整理为结构化JSON的LLM API Key（留空则使用OCR配置）</div>
+	      </div>
+	      
+	      <div class="form-group">
+	        <label for="llmBaseUrl">LLM API Base URL</label>
+	        <input type="text" id="llmBaseUrl" placeholder="留空则复用OCR API Base URL">
+	        <div class="help-text">用于结构化整理的API基础URL（留空则使用OCR API Base URL）</div>
+	      </div>
+	      
+	      <div class="form-group">
+	        <label for="llmModel">LLM模型</label>
+	        <input type="text" id="llmModel" placeholder="deepseek-v3.2" value="deepseek-v3.2">
+	        <div class="help-text">用于从OCR文本提取标题/作者/日期等结构化信息的模型（默认: deepseek-v3.2）</div>
+	      </div>
+	    </div>
+	    
+	    <div class="section">
+	      <div class="section-title">下载文件配置</div>
+	      <div id="fileConfigs">
+	        <!-- 文件配置将动态添加到这里 -->
+      </div>
+      <button type="button" class="add-file-btn" id="addFileBtn">+ 添加文件</button>
+    </div>
+    
+    <div class="btn-group">
+      <button type="button" class="btn btn-secondary" id="resetBtn">重置为默认</button>
+      <button type="button" class="btn btn-primary" id="saveBtn">保存配置</button>
+    </div>
+  </div>
+  
+  <script src="options.js"></script>
+</body>
+</html>
+

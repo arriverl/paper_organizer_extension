@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>论文智能整理助手</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <h1>📄 论文智能整理助手</h1>
+          <p class="subtitle">自动提取论文信息并整理归档</p>
+        </div>
+        <button id="settingsBtn" class="settings-btn" title="设置">
+          <span style="font-size: 20px;">⚙️</span>
+        </button>
+      </div>
+    </header>
+    
+    <div id="downloadDirInfo" class="download-dir-info" style="background: #f0f0f0; padding: 8px 12px; margin: 10px 0; border-radius: 4px; font-size: 11px;">
+      <div style="margin-bottom: 5px;">
+        <strong>下载目录（绝对路径）:</strong>
+      </div>
+      <div style="display: flex; gap: 5px; align-items: center;">
+        <input type="text" id="downloadDirInput" placeholder="例如: D:\360安全浏览器下载" 
+               style="flex: 1; padding: 4px 8px; border: 1px solid #ddd; border-radius: 3px; font-size: 11px; font-family: monospace;">
+        <button id="saveDirBtn" class="btn btn-secondary" style="padding: 4px 10px; font-size: 11px;">保存</button>
+      </div>
+      <div id="dirStatus" style="margin-top: 5px; font-size: 10px; color: #666;"></div>
+    </div>
+    
+    <div class="stats">
+      <div class="stat-item">
+        <span class="stat-number" id="totalPapers">0</span>
+        <span class="stat-label">已下载论文</span>
+      </div>
+    </div>
+    
+    <div class="controls">
+      <button id="refreshBtn" class="btn btn-primary">刷新列表</button>
+      <button id="clearBtn" class="btn btn-secondary">清空记录</button>
+    </div>
+    
+    <div class="paper-list-container">
+      <h2>论文列表</h2>
+      <div id="paperList" class="paper-list">
+        <div class="empty-state">暂无论文记录</div>
+      </div>
+    </div>
+  </div>
+  
+  <script src="popup.js"></script>
+</body>
+</html>
+

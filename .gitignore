@@ -1,0 +1,12 @@
+# 忽略文件
+*.log
+.DS_Store
+Thumbs.db
+
+# 图标文件（如果不想提交）
+# icons/*.png
+
+# 临时文件
+*.tmp
+*.bak
+
